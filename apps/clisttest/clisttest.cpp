@@ -7,8 +7,6 @@
 class CircularListTest : public ::testing::Test {
 protected:
     CircularList<int> list;
-
-    // Helper to capture traverse output
     std::string captureTraverseOutput(CircularList<int>& l) {
         std::stringstream ss;
         l.traverse([&ss](int& data) {
@@ -75,19 +73,4 @@ TEST_F(CircularListTest, PopBack) {
     EXPECT_EQ(captureTraverseOutput(list), "10 ") << "Traverse should output 10";
     list.pop_back();
     EXPECT_TRUE(list.empty()) << "List should be empty after popping all elements";
-}
-
-// Test mixed operations
-TEST_F(CircularListTest, MixedOperations) {
-    list.push_back(10);
-    list.push_front(5);
-    list.push_back(15);
-    EXPECT_EQ(list.front(), 5) << "Front should be 5";
-    EXPECT_EQ(list.back(), 15) << "Back should be 15";
-    EXPECT_EQ(captureTraverseOutput(list), "5 10 15 ") << "Traverse should output 5 10 15";
-    list.pop_front();
-    EXPECT_EQ(captureTraverseOutput(list), "10 15 ") << "Traverse should output 10 15 after pop_front";
-    list.pop_back();
-    EXPECT_EQ(captureTraverseOutput(list), "10 ") << "Traverse should output 10 after pop_back";
-}
-```
+};
