@@ -1,134 +1,194 @@
 #pragma once
 #include <iostream>
-#include <chrono>
-#include <memory>
-#include <algorithm>
-#include <cmath>
-#include <string>
-
-template<typename T>
-class VectorBase {
-public:
-    virtual ~VectorBase() {}
-    virtual void push_back(const T& value) = 0;
-    virtual int size() const = 0;
-};
+#include <cstdlib> 
 
 template <typename T>
-class Vector : public VectorBase<T> {
-protected:
-    T* arr;
-    int length;
-    int vCapacity;
+class Vector {
+private:
+    class VectorIterator {
+    public:
+        using iterator_category = std::random_access_iterator_tag;
+        using difference_type   = std::ptrdiff_t;
+        using value_type        = T;
+        using pointer           = T*;
+        using reference         = T&;
 
-    virtual void expand() {
-        int newCapacity = (vCapacity == 0) ? 1 : vCapacity * 2;
-        T* temp = new T[newCapacity];
-        
-        for (int i = 0; i < length; ++i) {
-            temp[i] = arr[i];
+        VectorIterator() : m_ptr(nullptr) {}
+        VectorIterator(pointer ptr) : m_ptr(ptr) {}
+
+        reference operator*() const { 
+            return *m_ptr; 
         }
 
-        delete[] arr;
-        vCapacity = newCapacity;
-        arr = temp;
-    }
+        VectorIterator& operator++() { 
+            m_ptr++; 
+            return *this; 
+        }
 
+        VectorIterator operator++(int) { 
+            VectorIterator tmp = *this; 
+            ++(*this); 
+            return tmp; 
+        }
+        
+        bool operator==(const VectorIterator& other) const { 
+            return m_ptr == other.m_ptr; 
+        }
+
+        bool operator!=(const VectorIterator& other) const { 
+            return m_ptr != other.m_ptr; 
+        }
+
+        
+        VectorIterator operator+(difference_type n) const {
+            return VectorIterator(m_ptr + n);
+        }
+
+        difference_type operator-(const VectorIterator& other) const {
+            return m_ptr - other.m_ptr;
+        }
+
+    private:
+        pointer m_ptr;
+    };
+    
 public:
-    Vector() : arr(new T[1]), length(0), vCapacity(1) {}
+    using iterator = VectorIterator;
 
+    Vector() : arr(new T[1]), vCapacity(1), length(0) {}
+    
+    // Copy Constructor
+    Vector(const Vector& obj) : arr(new T[obj.vCapacity]), vCapacity(obj.vCapacity), length(obj.length) {
+        for (int i = 0; i < obj.length; i++) {
+            this->arr[i] = obj.arr[i];
+        }
+    }
+    
     ~Vector() {
-        delete[] arr;
+        delete [] arr;
+        arr = nullptr;
     }
 
-    void push_back(const T& data) override {
+
+    iterator begin() {
+        return iterator(arr);
+    }
+
+    iterator end() {
+        return iterator(arr + length);
+    }
+    
+
+    void put(T data, int index) {
+        if (index == vCapacity) {
+            push_back(data);
+        }
+        else {
+            arr[index] = data;
+        }
+    }
+
+    void push_back(T data) {
+        // if number of elements is equal to capacity
+        // than we need to reallocate and deep copy
         if (length == vCapacity) {
-            expand();
+            expand(2 * vCapacity);
         }
         arr[length] = data;
         length++;
     }
 
-    int size() const override {
+    T &at(int index) {
+        if (index < 0 || index >= length) { 
+            std::cerr << "Vector: index out of bounds on access" << std::endl;
+            exit(1);
+        }
+        else {
+            return arr[index];
+        }
+    }
+    
+    T at(int index) const {
+        if (index < 0 || index >= length) {
+            std::cerr << "Vector: index out of bounds on const access" << std::endl;
+            exit(1);
+        }
+        return arr[index];
+    }
+    
+    T get(int index) const {
+        return at(index);
+    }
+
+    int size() const {
         return length;
     }
-};
 
-template <typename T>
-class VectorSTL : public Vector<T> {
-protected:
-    void expand() override {
-        int newCapacity = (this->vCapacity == 0) ? 1 : this->vCapacity * 2;
-        T* temp = new T[newCapacity];
-
-        std::copy(this->arr, this->arr + this->length, temp);
-
-        delete[] this->arr;
-        this->vCapacity = newCapacity;
-        this->arr = temp;
+    int capacity() const {
+        return vCapacity;
     }
 
-public:
-    VectorSTL() : Vector<T>() {}
-};
+    void traverse() {
+        for (int i = 0; i < length; i++) {
+            std::cout << arr[i] << " ";
+        }
+        std::cout << std::endl;
+    }
 
-template <typename T>
-class VectorOptimized : public Vector<T> {
-protected:
-    void expand() override {
-        int newCapacity;
-        if (this->vCapacity == 0) {
-            newCapacity = 128;
-        } else {
-            newCapacity = this->vCapacity * 4;
+	bool operator==(Vector& other) const {
+		if (other.size() != length) {
+			return false;
+		}
+		else {
+			for (int i = 0; i < length; i++) {
+				if (arr[i] != other.get(i)) {
+					return false;
+				}
+			}
+		}
+		return true;
+	};
+
+    T& operator[](int i) {
+        if ((i < 0) || (i >= length)) {
+            std::cerr << std::endl << "Vector index out of bounds" << std::endl;
+        }
+        return at(i); 
+    }
+
+    Vector& operator=(const Vector& source) {
+        if (this == &source) {
+            return *this;
         }
         
-        T* temp = new T[newCapacity];
-        std::copy(this->arr, this->arr + this->length, temp);
-
-        delete[] this->arr;
-        this->vCapacity = newCapacity;
-        this->arr = temp;
+        Vector temp = source;
+        
+        std::swap(arr, temp.arr);
+        std::swap(vCapacity, temp.vCapacity);
+        std::swap(length, temp.length);
+        
+        return *this;
     }
+    
+private:
+    T *arr;
+    int vCapacity;
+    int length;
 
-public:
-    VectorOptimized() : Vector<T>() {}
+    void expand(int newCapacity) {
+        if (newCapacity > vCapacity) {
+            T *temp = new T[newCapacity];
+            for (int i = 0; i < length; i++) {
+                temp[i] = arr[i];
+            }
+            delete[] arr;
+            vCapacity = newCapacity;
+            arr = temp;
+        }
+        else {
+            std::cerr << "vector::expand: new capacity is less than equal to current\n";
+        }
+    }
 };
 
 
-template <typename T>
-void timeVectorGrowth(VectorBase<T>& vec, const std::string& name) {
-    std::cout << "--- " << name << " Timings ---" << std::endl;
-    int numElementsToAdd = 2;
-
-    for (int i = 0; i < 22; ++i) {
-        auto start = std::chrono::high_resolution_clock::now();
-        
-        for (int j = 0; j < numElementsToAdd; ++j) {
-            vec.push_back(j);
-        }
-
-        auto stop = std::chrono::high_resolution_clock::now();
-        auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(stop - start);
-        
-        std::cout << "Added " << numElementsToAdd << " elements. Total elements: " 
-                  << vec.size() << ". Time taken: " << duration.count() 
-                  << " ms." << std::endl;
-        
-        numElementsToAdd *= 2;
-    }
-    std::cout << std::endl;
-}
-
-int main() {
-    Vector<int> vecForLoop;
-    timeVectorGrowth(vecForLoop, "Vector with For-Loop Copy");
-
-    VectorSTL<int> vecSTL;
-    timeVectorGrowth(vecSTL, "Vector with std::copy");
-
-    VectorOptimized<int> vecOptimized;
-    timeVectorGrowth(vecOptimized, "Vector with Larger Initial Capacity and Quadrupling");
-
-    return 0;
-}
