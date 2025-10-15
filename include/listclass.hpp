@@ -1,8 +1,8 @@
 #pragma once
 #include <functional>
 #include <iostream>
+#include <memory>
 #include <stdexcept>
-#include <utility> 
 
 template <typename T>
 class List {
@@ -10,48 +10,33 @@ private:
     class Node {
     public:
         T data;
-        Node* prev;
-        Node* next;
-        bool isDeleted; // Flag to  know if deleted
+        Node* prev;                    
+        std::unique_ptr<Node> next;   
+        bool isDeleted;                
 
-        Node(const T& d = T(), Node* p = nullptr, Node* n = nullptr)
-            : data(d), prev(p), next(n), isDeleted(false) {}
+        Node(const T& d = T(), Node* p = nullptr)
+            : data(d), prev(p), next(nullptr), isDeleted(false) {}
     };
 
-    Node* head = nullptr;
-    Node* tail = nullptr;
-    int activeCount = 0;   
-    int deletedCount = 0;  // # of deleted items
-
-    void deleteListContents() {
-        Node* current = head;
-        Node* temp = nullptr;
-        while (current != nullptr) {
-            temp = current->next; 
-            delete current;
-            current = temp;
-        }
-        head = tail = nullptr;
-        activeCount = 0;
-        deletedCount = 0;
-    }
+    std::unique_ptr<Node> head;    
+    Node* tail;                    
+    int activeCount = 0;           
+    int deletedCount = 0;          
 
     void cleanup_deleted_nodes() {
         if (deletedCount == 0) return;
 
-        std::cout << "\n--- CLEANUP TRIGGERED: Physically deleting " << deletedCount << " ghost nodes. ---\n";
-        
-        Node* current = head;
-        Node* next_node = nullptr;
+        std::cout << "\n--- CLEANUP TRIGGERED: deleting " << deletedCount << " nodes. ---\n";
 
-        while (current != nullptr) {
-            next_node = current->next; 
-
+        Node* current = head.get();
+        while (current) {
             if (current->isDeleted) {
+                std::unique_ptr<Node> next_node = std::move(current->next);
+
                 if (current->prev) {
-                    current->prev->next = current->next;
+                    current->prev->next = std::move(next_node);
                 } else {
-                    head = current->next;
+                    head = std::move(next_node);
                 }
 
                 if (current->next) {
@@ -60,30 +45,32 @@ private:
                     tail = current->prev;
                 }
 
-                delete current;
+                current = current->next.get();
+            } else {
+                current = current->next.get();
             }
-            current = next_node; 
         }
 
-        deletedCount = 0; 
+        deletedCount = 0;
         std::cout << "--- Cleanup Complete. Active items remaining: " << activeCount << " ---\n";
     }
 
 public:
-    List() = default;
+    List() : head(nullptr), tail(nullptr) {}
 
-    List(T newData) {
-        push_back(newData); 
+    List(const T& newData) {
+        push_back(newData);
     }
 
-    List(const List& rhs) { 
-        Node* current = rhs.head;
-        while (current != nullptr) {
+    List(const List& rhs) {
+        Node* current = rhs.head.get();
+        while (current) {
             if (!current->isDeleted) {
                 push_back(current->data);
             }
-            current = current->next;
+            current = current->next.get();
         }
+        deletedCount = 0;
     }
 
     List& operator=(const List& rhs) {
@@ -97,142 +84,148 @@ public:
         return *this;
     }
 
-    ~List() {
-        deleteListContents();
-    }
+    ~List() = default;
+
     bool empty() const {
-        return activeCount == 0; 
+        return activeCount == 0;
     }
-        int size() const {
+
+    int size() const {
         return activeCount + deletedCount;
     }
-        int active_size() const {
+
+    int active_size() const {
         return activeCount;
     }
-        int ghost_size() const {
+
+    int ghost_size() const {
         return deletedCount;
     }
 
     T front() {
-        Node* current = head;
-        while (current != nullptr && current->isDeleted) {
-            current = current->next;
+        Node* current = head.get();
+        while (current && current->isDeleted) {
+            current = current->next.get();
         }
-        if (current == nullptr) {
+        if (!current) {
             throw std::runtime_error("List is logically empty (no active items)");
         }
         return current->data;
     }
 
     T back() {
-        Node* current = tail; 
-        while (current != nullptr && current->isDeleted) {
+        Node* current = tail;
+        while (current && current->isDeleted) {
             current = current->prev;
         }
-        if (current == nullptr) {
+        if (!current) {
             throw std::runtime_error("List is logically empty (no active items)");
         }
         return current->data;
     }
 
-    void push_front(T data) {
-        Node* newNode = new Node(data);
-        newNode->next = head;
-        newNode->prev = nullptr;
-        if (head) head->prev = newNode;
-        head = newNode;
-        if (!tail) tail = newNode;
-        
-        activeCount++; 
+    void push_front(const T& data) {
+        std::unique_ptr<Node> newNode(new Node(data));
+        newNode->next = std::move(head);
+        if (newNode->next) {
+            newNode->next->prev = newNode.get();
+        }
+        head = std::move(newNode);
+        if (!tail) {
+            tail = head.get();
+        }
+        activeCount++;
     }
 
-    void push_back(T data) { 
-        Node* newNode = new Node(data);
-        newNode->next = nullptr;
-        newNode->prev = tail;
-        if (tail) tail->next = newNode;
-        tail = newNode;
-        if (!head) head = newNode;
-        
-        activeCount++; 
+    void push_back(const T& data) {
+        std::unique_ptr<Node> newNode(new Node(data, tail));
+        if (tail) {
+            tail->next = std::move(newNode);
+            tail = tail->next.get();
+        } else {
+            head = std::move(newNode);
+            tail = head.get();
+        }
+        activeCount++;
     }
 
     void pop_front() {
         if (empty()) return;
 
-        Node* nodeToRemove = head;
-        while (nodeToRemove != nullptr && nodeToRemove->isDeleted) {
-            nodeToRemove = nodeToRemove->next;
+        Node* current = head.get();
+        while (current && current->isDeleted) {
+            current = current->next.get();
+        }
+        if (!current) return;
+
+        if (current->prev) {
+            current->prev->next = std::move(current->next);
+        } else {
+            head = std::move(current->next);
+        }
+        if (current->next) {
+            current->next->prev = current->prev;
+        } else {
+            tail = current->prev;
         }
 
-        if (nodeToRemove == nullptr) return; 
-
-        if (nodeToRemove->prev) nodeToRemove->prev->next = nodeToRemove->next;
-        else head = nodeToRemove->next; 
-
-        if (nodeToRemove->next) nodeToRemove->next->prev = nodeToRemove->prev;
-        else tail = nodeToRemove->prev; 
-
-        delete nodeToRemove;
         activeCount--;
-        
         if (deletedCount == activeCount) {
-             cleanup_deleted_nodes();
+            cleanup_deleted_nodes();
         }
     }
 
     void pop_back() {
-        if (empty()) return; 
+        if (empty()) return;
 
-        Node* nodeToRemove = tail;
-        while (nodeToRemove != nullptr && nodeToRemove->isDeleted) {
-            nodeToRemove = nodeToRemove->prev;
+        Node* current = tail;
+        while (current && current->isDeleted) {
+            current = current->prev;
         }
-        
-        if (nodeToRemove == nullptr) return; 
+        if (!current) return;
 
-        if (nodeToRemove->prev) nodeToRemove->prev->next = nodeToRemove->next;
-        else head = nodeToRemove->next; 
+        if (current->prev) {
+            current->prev->next = std::move(current->next);
+            tail = current->prev;
+        } else {
+            head = std::move(current->next);
+            tail = nullptr;
+        }
+        if (head) {
+            head->prev = nullptr;
+        }
 
-        if (nodeToRemove->next) nodeToRemove->next->prev = nodeToRemove->prev;
-        else tail = nodeToRemove->prev; 
-
-        delete nodeToRemove;
         activeCount--;
-        
         if (deletedCount == activeCount) {
-             cleanup_deleted_nodes();
+            cleanup_deleted_nodes();
         }
     }
 
     void lazy_remove(const T& data) {
         if (activeCount == 0) return;
 
-        Node* current = head;
-        while (current != nullptr) {
+        Node* current = head.get();
+        while (current) {
             if (!current->isDeleted && current->data == data) {
                 current->isDeleted = true;
                 deletedCount++;
-                activeCount--; 
-
+                activeCount--;
                 if (deletedCount == activeCount) {
                     cleanup_deleted_nodes();
                 }
-                return; 
+                return;
             }
-            current = current->next;
+            current = current->next.get();
         }
     }
 
     void traverse(std::function<void(T&)> doIt) {
-        Node* current = head;
-        while (current != nullptr) {
+        Node* current = head.get();
+        while (current) {
             if (!current->isDeleted) {
                 doIt(current->data);
             }
-            current = current->next;
+            current = current->next.get();
         }
     }
 };
-
-
