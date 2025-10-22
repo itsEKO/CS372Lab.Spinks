@@ -1,0 +1,281 @@
+Isaac Spinks
+Ai Tool used gemini
+Prompt:
+give me the the strength, weaknesses and potential problems with the following c++ tree class.
+#pragma once
+#include <memory>
+#include <functional>
+#include <cassert>
+#include <initializer_list>
+#include <vector>
+#include <iostream>
+template<typename T>
+class Tree
+{
+struct Node
+{
+Node(std::shared_ptr<const Node> lft, T val, std::shared_ptr<const Node> rgt,
+std::shared_ptr<const Node> parent)
+: _lft(lft), _val(val), _rgt(rgt), _parent(parent)
+{}
+std::shared_ptr<const Node> _lft;
+T _val;
+std::shared_ptr<const Node> _rgt;
+std::weak_ptr<const Node> _parent;
+};
+explicit Tree(std::shared_ptr<const Node> node) : _root(node) {}
+public:
+Tree() : _root(nullptr) {}
+Tree(const Tree& other) = default;
+Tree& operator=(const Tree& other) = default;
+~Tree() = default;
+Tree(Tree&& other) = default;
+Tree& operator=(Tree&& other) = default;
+Tree(Tree lft, T val, Tree rgt)
+{
+std::shared_ptr<const Node> newLeft = lft._root
+? std::make_shared<Node>(lft._root->_lft, lft._root->_val, lft._root->_rgt, nullptr)
+: nullptr;
+std::shared_ptr<const Node> newRight = rgt._root
+? std::make_shared<Node>(rgt._root->_lft, rgt._root->_val, rgt._root->_rgt, nullptr)
+: nullptr;
+_root = std::make_shared<Node>(newLeft, val, newRight, nullptr);
+if (newLeft) {
+newLeft = std::make_shared<Node>(newLeft->_lft, newLeft->_val, newLeft->_rgt, _root);
+}
+if (newRight) {
+newRight = std::make_shared<Node>(newRight->_lft, newRight->_val, newRight->_rgt,
+_root);
+}
+if (newLeft || newRight) {
+_root = std::make_shared<Node>(newLeft, val, newRight, nullptr);
+}
+}
+Tree(std::initializer_list<T> init) {
+Tree t;
+for (T v : init) {
+t = t.insert(v);
+}
+_root = t._root;
+}
+bool isEmpty() const { return !_root; }
+size_t size() const {
+if (isEmpty()) return 0;
+return 1 + left().size() + right().size();
+}
+T root() const {
+assert(!isEmpty());
+return _root->_val;
+}
+Tree left() const {
+assert(!isEmpty());
+return Tree(_root->_lft);
+}
+Tree right() const {
+assert(!isEmpty());
+return Tree(_root->_rgt);
+}
+template <typename Compare = std::less<T>>
+Tree insert(T x, Compare comp = std::less<T>()) const {
+if (isEmpty()) {
+return Tree(std::make_shared<Node>(nullptr, x, nullptr, nullptr));
+}
+T y = root();
+if (comp(x, y)) {
+Tree newLeft = left().insert(x, comp);
+std::shared_ptr<const Node> newLeftNode = newLeft._root
+? std::make_shared<Node>(newLeft._root->_lft, newLeft._root->_val,
+newLeft._root->_rgt, nullptr)
+: nullptr;
+std::shared_ptr<const Node> newRightNode = _root->_rgt
+? std::make_shared<Node>(_root->_rgt->_lft, _root->_rgt->_val, _root->_rgt->_rgt,
+nullptr)
+: nullptr;
+auto newNode = std::make_shared<Node>(newLeftNode, y, newRightNode, nullptr);
+if (newLeftNode) {
+newLeftNode = std::make_shared<Node>(newLeftNode->_lft, newLeftNode->_val,
+newLeftNode->_rgt, newNode);
+}
+if (newRightNode) {
+newRightNode = std::make_shared<Node>(newRightNode->_lft,
+newRightNode->_val, newRightNode->_rgt, newNode);
+}
+return Tree(std::make_shared<Node>(newLeftNode, y, newRightNode, nullptr));
+}
+else if (comp(y, x)) {
+Tree newRight = right().insert(x, comp);
+std::shared_ptr<const Node> newLeftNode = _root->_lft
+? std::make_shared<Node>(_root->_lft->_lft, _root->_lft->_val, _root->_lft->_rgt,
+nullptr)
+: nullptr;
+std::shared_ptr<const Node> newRightNode = newRight._root
+? std::make_shared<Node>(newRight._root->_lft, newRight._root->_val,
+newRight._root->_rgt, nullptr)
+: nullptr;
+auto newNode = std::make_shared<Node>(newLeftNode, y, newRightNode, nullptr);
+if (newLeftNode) {
+newLeftNode = std::make_shared<Node>(newLeftNode->_lft, newLeftNode->_val,
+newLeftNode->_rgt, newNode);
+}
+if (newRightNode) {
+newRightNode = std::make_shared<Node>(newRightNode->_lft,
+newRightNode->_val, newRightNode->_rgt, newNode);
+}
+return Tree(std::make_shared<Node>(newLeftNode, y, newRightNode, nullptr));
+}
+else {
+return *this;
+}
+}
+template <typename Compare = std::less<T>>
+bool member(T x, Compare comp = std::less<T>()) const {
+if (isEmpty()) {
+return false;
+}
+T y = root();
+if (comp(x, y)) {
+return left().member(x, comp);
+}
+else if (comp(y, x)) {
+return right().member(x, comp);
+}
+else {
+return true;
+}
+}
+template<typename Compare = std::less<T>>
+bool find(T x, Tree& subtreeWhereFound, Compare comp = std::less<T>()) const {
+if (isEmpty()) {
+subtreeWhereFound = Tree();
+return false;
+}
+T y = root();
+if (comp(x, y)) {
+return left().find(x, subtreeWhereFound, comp);
+}
+else if (comp(y, x)) {
+return right().find(x, subtreeWhereFound, comp);
+}
+else {
+subtreeWhereFound = *this;
+return true;
+}
+}
+std::vector<T> pathToRoot(T x) const {
+std::vector<T> path;
+if (isEmpty()) return path;
+Tree subtree;
+if (find(x, subtree)) {
+std::shared_ptr<const Node> current = subtree._root;
+while (current) {
+path.push_back(current->_val);
+current = current->_parent.lock();
+}
+}
+return path;
+}
+void preorder(std::function<void(T)> visit) const {
+if (isEmpty())
+return;
+T contents = root();
+visit(contents);
+left().preorder(visit);
+right().preorder(visit);
+}
+void inorder(std::function<void(T)> visit) const {
+if (isEmpty()) return;
+left().inorder(visit);
+T contents = root();
+visit(contents);
+right().inorder(visit);
+}
+void postorder(std::function<void(T)> visit) const {
+if (isEmpty()) return;
+left().postorder(visit);
+right().postorder(visit);
+T contents = root();
+visit(contents);
+}
+private:
+std::shared_ptr<const Node> _root;
+};
+template<typename T>
+std::ostream& operator<<(std::ostream& os, const Tree<T>& tree) {
+if (tree.isEmpty()) {
+os << "[]";
+return os;
+}
+os << "[";
+tree.inorder([&os](T val) { os << val << " "; });
+os << "]";
+return os;
+}
+Response:
+Strengths 💪
+● Immutability and Persistence: The core strength is that operations like insert and
+the Tree(Tree lft, T val, Tree rgt) constructor create a new tree while
+leaving the original tree structure completely intact. This is achieved by using
+std::shared_ptr<const Node> for child pointers, guaranteeing that the structure
+cannot be modified once created.
+○ This is excellent for thread safety (no need for locks if the data itself is
+immutable) and simplifying concurrent programming.
+○ It allows for "undo" functionality or maintaining a history of versions easily.
+○ The Tree object itself is a value type, which is often easier to reason about.
+● Automatic Memory Management: The use of std::shared_ptr and
+std::weak_ptr (for the parent) handles memory allocation and deallocation
+automatically, preventing most manual memory leaks. The shared pointers allow for
+structural sharing, meaning common subtrees between old and new versions aren't
+copied, which is a significant efficiency gain for persistent data structures.
+● Parent Pointers (std::weak_ptr): Including a parent pointer, even as a
+std::weak_ptr, enables easy traversal up the tree, as demonstrated by the
+pathToRoot function. Using std::weak_ptr correctly breaks the cyclic dependency
+(Child→Parent→Child), preventing memory leaks.
+● Functional Interface: The insert, left(), and right() methods are all const and
+return new Tree objects, aligning with a functional programming style.
+● Standard Library Integration: Utilizes modern C++ features like std::shared_ptr,
+std::weak_ptr, std::function, and std::initializer_list.
+Weaknesses 😫
+● Performance Overhead of Immutability: While structural sharing reduces the impact,
+every structural change (like insert) requires recreating a path of nodes from the
+inserted node up to the root. In the worst case, this could mean copying O(h) nodes
+(where h is the height of the tree) and potentially O(n) memory allocation in a badly
+balanced tree if no sharing occurs. For a standard, mutable tree, insertion is typically
+O(h) time without additional memory allocation overhead.
+● High Recursive Overhead: Many methods (size(), insert(), member(),
+preorder(), etc.) are implemented recursively by returning a new Tree object for the
+subtrees: left().size(), left().insert(x, comp), etc.
+○ Creating a new Tree wrapper object for every recursive call adds minor
+overhead.
+○ This deep recursion can lead to stack overflow for tall or unbalanced trees.
+● Inefficient size(): The size() function is implemented as a recursive traversal. For a
+tree with N nodes, it has a time complexity of O(N). If the size were stored as a field in
+the Node struct, it could be O(1). Even in a persistent tree, size can be maintained in
+O(logN) or O(1) during insertion.
+Potential Problems 🚨
+● Broken Structural Sharing in Constructors: The Tree(Tree lft, T val, Tree
+rgt) constructor and the insert method attempt to create a new tree but don't handle
+parent pointer updates correctly for the entire subtree.
+○ In the insert method, the complex logic to update parent pointers is severely
+flawed. For example, in the comp(x, y) branch, it copies the root node's
+children (newLeftNode and newRightNode) without preserving their entire
+subtrees, which destroys structural sharing beyond the immediate children of the
+root. This results in deep copies of the existing left and right subtrees, making
+the insertion O(N) (where N is the number of nodes in the copied subtree)
+instead of the expected O(height).
+○ The complex sequence of creating nodes with nullptr parents and then
+attempting to create new nodes with the correct parent pointers is redundant and
+wrong, especially the last part of the insert function:
+● The final return statement creates a second new root node, which is unnecessary and
+confusing. The parent pointers of newLeftNode and newRightNode will point to the
+first newNode, not the second one being returned. This breaks the pathToRoot
+functionality for nodes below the root.
+std::initializer_list Inefficiency: The initializer list constructor repeatedly calls t =
+t.insert(v). Given the flawed O(N) complexity of insert, this constructor could take O(N2)
+time for N elements, which is extremely slow.
+Design as Binary Search Tree (BST) is Implicit: The insert and member methods strongly
+imply the class is intended to be a Binary Search Tree because they use a Compare object to
+decide which subtree to descend into. However, the class name is simply Tree, and it lacks any
+mechanisms to balance the tree, meaning a sequence of sorted insertions will lead to a
+degenerate linked list with O(N) height, degrading all lookups and insertions to O(N).
+Lack of Essential BST Operations: The class is missing key BST features like deletion and
+iterators, which are crucial for a usable data structure.
